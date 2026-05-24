@@ -200,7 +200,3 @@ Hacettepe University
 GitHub: [@enesvta](https://github.com/enesvta)
 
 ---
-
-### License
-
-Bu proje kişisel, akademik ve mesleki gelişim amacıyla hazırlanmıştır. Lisans bilgisi daha sonra eklenebilir.
