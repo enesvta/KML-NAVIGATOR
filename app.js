@@ -1,6 +1,6 @@
 window.onGoogleMapsLoaded = () => {
   window.__gmapsReady = true;
-  setStatus("KML yükleyin");
+  setStatus("KML/KMZ yükleyin");
   updateDateChip();
 };
 
@@ -226,6 +226,110 @@ function initMap(){
     mapTypeControl: false,
     clickableIcons: false,
   });
+}
+
+
+function getFileExtension(filename){
+  return (filename || "").toLowerCase().split(".").pop() || "";
+}
+
+function findZipEndOfCentralDirectory(view){
+  const signature = 0x06054b50;
+  const minOffset = Math.max(0, view.byteLength - 22 - 0xffff);
+
+  for (let i = view.byteLength - 22; i >= minOffset; i--){
+    if (view.getUint32(i, true) === signature) return i;
+  }
+
+  return -1;
+}
+
+async function inflateRawZipBytes(bytes){
+  if (!("DecompressionStream" in window)){
+    throw new Error("KMZ açmak için modern tarayıcı gerekir. Chrome veya Edge ile deneyin.");
+  }
+
+  try{
+    const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+    const buffer = await new Response(stream).arrayBuffer();
+    return new Uint8Array(buffer);
+  }catch(err){
+    throw new Error("KMZ sıkıştırması açılamadı. Dosyayı Google Earth/QGIS ile yeniden KMZ olarak kaydedip deneyin.");
+  }
+}
+
+async function extractKmlTextFromKmz(file){
+  const buffer = await file.arrayBuffer();
+  const data = new Uint8Array(buffer);
+  const view = new DataView(buffer);
+  const decoder = new TextDecoder("utf-8");
+
+  const eocd = findZipEndOfCentralDirectory(view);
+  if (eocd < 0) throw new Error("KMZ dosyası okunamadı. Geçerli bir KMZ/ZIP yapısı bulunamadı.");
+
+  const entryCount = view.getUint16(eocd + 10, true);
+  let centralOffset = view.getUint32(eocd + 16, true);
+  const kmlEntries = [];
+
+  for (let i = 0; i < entryCount; i++){
+    if (view.getUint32(centralOffset, true) !== 0x02014b50) break;
+
+    const method = view.getUint16(centralOffset + 10, true);
+    const compressedSize = view.getUint32(centralOffset + 20, true);
+    const fileNameLength = view.getUint16(centralOffset + 28, true);
+    const extraLength = view.getUint16(centralOffset + 30, true);
+    const commentLength = view.getUint16(centralOffset + 32, true);
+    const localHeaderOffset = view.getUint32(centralOffset + 42, true);
+    const nameStart = centralOffset + 46;
+    const filename = decoder.decode(data.slice(nameStart, nameStart + fileNameLength));
+
+    if (/\.kml$/i.test(filename)){
+      kmlEntries.push({ filename, method, compressedSize, localHeaderOffset });
+    }
+
+    centralOffset = nameStart + fileNameLength + extraLength + commentLength;
+  }
+
+  if (!kmlEntries.length) throw new Error("KMZ içinde KML dosyası bulunamadı.");
+
+  kmlEntries.sort((a, b) => {
+    const ad = a.filename.toLowerCase().endsWith("doc.kml") ? 0 : 1;
+    const bd = b.filename.toLowerCase().endsWith("doc.kml") ? 0 : 1;
+    return ad - bd || a.filename.length - b.filename.length;
+  });
+
+  for (const entry of kmlEntries){
+    const localOffset = entry.localHeaderOffset;
+    if (view.getUint32(localOffset, true) !== 0x04034b50) continue;
+
+    const localNameLength = view.getUint16(localOffset + 26, true);
+    const localExtraLength = view.getUint16(localOffset + 28, true);
+    const dataStart = localOffset + 30 + localNameLength + localExtraLength;
+    const compressed = data.slice(dataStart, dataStart + entry.compressedSize);
+
+    let kmlBytes;
+    if (entry.method === 0){
+      kmlBytes = compressed;
+    }else if (entry.method === 8){
+      kmlBytes = await inflateRawZipBytes(compressed);
+    }else{
+      throw new Error(`KMZ içindeki KML desteklenmeyen sıkıştırma yöntemiyle kaydedilmiş: ${entry.method}`);
+    }
+
+    const text = decoder.decode(kmlBytes);
+    if (text.trim()) return text;
+  }
+
+  throw new Error("KMZ içindeki KML dosyası boş veya okunamadı.");
+}
+
+async function readKmlTextFromFile(file){
+  const ext = getFileExtension(file.name);
+
+  if (ext === "kmz") return extractKmlTextFromKmz(file);
+  if (ext === "kml" || !ext) return file.text();
+
+  throw new Error("Lütfen .kml veya .kmz dosyası seçin.");
 }
 
 function parseKml(text){
@@ -714,7 +818,7 @@ function enableSheetDrag(){
   els.sheet.addEventListener("touchend", onEnd, { passive: true });
 }
 
-async function handleKmlFile(file){
+async function handleKmlKmzFile(file){
   clearError();
   setStatus("Yükleniyor…");
   updateDateChip();
@@ -722,10 +826,10 @@ async function handleKmlFile(file){
 
   sessionStoragePrefix = makeSessionId();
 
-  const text = await file.text();
+  const text = await readKmlTextFromFile(file);
   points = parseKml(text);
 
-  if (!points.length) throw new Error("KML içinde nokta bulunamadı.");
+  if (!points.length) throw new Error("KML/KMZ içinde nokta bulunamadı.");
 
   initMap();
   setKmlMarkers();
@@ -760,7 +864,7 @@ function fullResetUi(){
   els.search.value = "";
   els.chipCount.textContent = "0";
   els.chipGps.textContent = "GPS";
-  setStatus("KML yükleyin");
+  setStatus("KML/KMZ yükleyin");
   closeForm();
 
   els.screenMain.style.display = "none";
@@ -773,7 +877,7 @@ function confirmAndExit(){
     return;
   }
 
-  const ok = window.confirm("Çıkarsanız bu KML için girilmiş kurulum ve toplama kayıtları silinecek. Devam edilsin mi?");
+  const ok = window.confirm("Çıkarsanız bu KML/KMZ için girilmiş kurulum ve toplama kayıtları silinecek. Devam edilsin mi?");
   if (!ok) return;
 
   clearCurrentSessionRecords();
@@ -787,7 +891,7 @@ els.fileInput.addEventListener("change", async (e) => {
   if (!f) return;
 
   try{
-    await handleKmlFile(f);
+    await handleKmlKmzFile(f);
   }catch(err){
     console.error(err);
     showError(err.message || "Hata");
@@ -833,7 +937,7 @@ els.btnHeightUp.addEventListener("click", () => {
 
 enableSheetDrag();
 setSheetState(false);
-setStatus("KML yükleyin");
+setStatus("KML/KMZ yükleyin");
 updateDateChip();
 updateHeightPreview(els.deviceHeight.value);
 
