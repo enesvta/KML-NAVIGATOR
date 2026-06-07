@@ -6,9 +6,9 @@
   <meta name="theme-color" content="#070A12" />
   <title>CENTRAL MUHENDISLIK</title>
 
-  <link rel="manifest" href="manifest.webmanifest?v=SAHA7" />
+  <link rel="manifest" href="manifest.webmanifest?v=SAHA8" />
   <link rel="apple-touch-icon" href="icons/logo.jpg" />
-  <link rel="stylesheet" href="style.css?v=SAHA7" />
+  <link rel="stylesheet" href="style.css?v=SAHA8" />
 </head>
 <body>
 
@@ -16,8 +16,8 @@
   <div class="pickCard">
     <img class="pickLogo" src="icons/logo.jpg" alt="Logo" />
     <label class="pickBtn" id="pickBtn">
-      KML Seç
-      <input id="fileInput" type="file" accept=".kml,application/vnd.google-earth.kml+xml" hidden />
+      KML/KMZ Seç
+      <input id="fileInput" type="file" accept=".kml,.kmz,application/vnd.google-earth.kml+xml,application/vnd.google-earth.kmz" hidden />
     </label>
     <div class="pickErr" id="pickError" style="display:none;"></div>
   </div>
@@ -44,7 +44,7 @@
       <button class="miniBtn" id="btnFit" type="button" aria-label="Kanavaya Yaklaş">
         <span class="miniIcon">◎</span>
       </button>
-      <button class="miniBtn" id="btnKml" type="button" aria-label="KML Değiştir">
+      <button class="miniBtn" id="btnKml" type="button" aria-label="KML/KMZ Değiştir">
         <span class="miniIcon">⇪</span>
       </button>
       <button class="miniBtn" id="btnExport" type="button" aria-label="CSV Rapor">
@@ -173,7 +173,7 @@
 
 <div class="toast" id="toast"></div>
 
-<script src="app.js?v=SAHA7"></script>
+<script src="app.js?v=SAHA8"></script>
 <script
   async
   defer
