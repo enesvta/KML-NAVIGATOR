@@ -259,6 +259,30 @@ async function inflateRawZipBytes(bytes){
 }
 
 async function extractKmlTextFromKmz(file){
+  if (typeof JSZip !== "undefined"){
+    try{
+      const zip = await JSZip.loadAsync(file);
+      const kmlFiles = Object.keys(zip.files)
+        .filter(name => /\.kml$/i.test(name) && !zip.files[name].dir)
+        .sort((a, b) => {
+          const ad = a.toLowerCase().endsWith("doc.kml") ? 0 : 1;
+          const bd = b.toLowerCase().endsWith("doc.kml") ? 0 : 1;
+          return ad - bd || a.length - b.length;
+        });
+
+      if (!kmlFiles.length){
+        throw new Error("KMZ içinde KML dosyası bulunamadı.");
+      }
+
+      const text = await zip.files[kmlFiles[0]].async("text");
+      if (!text.trim()) throw new Error("KMZ içindeki KML dosyası boş.");
+      return text;
+    }catch(err){
+      throw new Error(err?.message || "KMZ dosyası açılamadı.");
+    }
+  }
+
+  // JSZip yüklenemezse basit KMZ dosyaları için yedek okuyucu.
   const buffer = await file.arrayBuffer();
   const data = new Uint8Array(buffer);
   const view = new DataView(buffer);
