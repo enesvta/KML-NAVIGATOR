@@ -1,4 +1,4 @@
-const CACHE_NAME = "central-saha-cache-2v7";
+const CACHE_NAME = "central-saha-cache-2v8";
 
 const ASSETS = [
   "./",
